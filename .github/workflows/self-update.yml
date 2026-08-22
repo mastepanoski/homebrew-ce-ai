@@ -1,0 +1,105 @@
+name: Self-update formula from ce-ai releases
+
+on:
+  schedule:
+    # Every 30 minutes
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  self-update:
+    name: Check for new ce-ai release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap
+        uses: actions/checkout@v4
+
+      - name: Resolve latest ce-ai release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$(gh api repos/mastepanoski/ce-ai/releases/latest --jq .tag_name)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if already up to date
+        id: check
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          CURRENT="$(sed -n 's/^  version "\(.*\)"$/\1/p' Formula/ce-ai.rb)"
+          if [ "$CURRENT" = "$VERSION" ]; then
+            echo "Formula already at $VERSION — nothing to do."
+            echo "update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Bumping $CURRENT -> $VERSION"
+            echo "update=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download release assets and compute checksums
+        if: steps.check.outputs.update == 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          mkdir -p dist && cd dist
+          BASE="https://github.com/mastepanoski/ce-ai/releases/download/${TAG}"
+          for asset in \
+            ce-ai-x86_64-apple-darwin.tar.gz \
+            ce-ai-aarch64-apple-darwin.tar.gz \
+            ce-ai-x86_64-unknown-linux-gnu.tar.gz \
+            ce-ai-aarch64-unknown-linux-gnu.tar.gz; do
+            curl -fsSL -o "$asset" "$BASE/$asset" || { echo "::error::Missing release asset $asset for $TAG"; exit 1; }
+          done
+          sha256sum *.tar.gz > checksums.txt
+          cat checksums.txt
+
+      - name: Render and commit formula
+        if: steps.check.outputs.update == 'true'
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          cd dist
+          read -r MAC_X86 _ < <(sha256sum ce-ai-x86_64-apple-darwin.tar.gz)
+          read -r MAC_ARM _ < <(sha256sum ce-ai-aarch64-apple-darwin.tar.gz)
+          read -r LINUX_X86 _ < <(sha256sum ce-ai-x86_64-unknown-linux-gnu.tar.gz)
+          read -r LINUX_ARM _ < <(sha256sum ce-ai-aarch64-unknown-linux-gnu.tar.gz)
+          cat > ../Formula/ce-ai.rb <<EOF
+          class CeAi < Formula
+            desc "CLI for managing the compound-engineering plugin across AI harnesses"
+            homepage "https://github.com/mastepanoski/ce-ai"
+            version "$VERSION"
+            license "MIT"
+
+            if OS.mac? && Hardware::CPU.intel?
+              url "https://github.com/mastepanoski/ce-ai/releases/download/v$VERSION/ce-ai-x86_64-apple-darwin.tar.gz"
+              sha256 "$MAC_X86"
+            elsif OS.mac? && Hardware::CPU.arm?
+              url "https://github.com/mastepanoski/ce-ai/releases/download/v$VERSION/ce-ai-aarch64-apple-darwin.tar.gz"
+              sha256 "$MAC_ARM"
+            elsif OS.linux? && Hardware::CPU.intel?
+              url "https://github.com/mastepanoski/ce-ai/releases/download/v$VERSION/ce-ai-x86_64-unknown-linux-gnu.tar.gz"
+              sha256 "$LINUX_X86"
+            elsif OS.linux? && Hardware::CPU.arm?
+              url "https://github.com/mastepanoski/ce-ai/releases/download/v$VERSION/ce-ai-aarch64-unknown-linux-gnu.tar.gz"
+              sha256 "$LINUX_ARM"
+            end
+
+            def install
+              bin.install "ce-ai"
+            end
+
+            test do
+              assert_match "ce-ai", shell_output("#{bin}/ce-ai --version")
+            end
+          end
+          EOF
+          cd ..
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/ce-ai.rb
+          git commit -m "ce-ai $VERSION"
+          git push origin main
