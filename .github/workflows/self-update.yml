@@ -47,13 +47,24 @@ jobs:
         run: |
           mkdir -p dist && cd dist
           BASE="https://github.com/mastepanoski/ce-ai/releases/download/${TAG}"
-          for asset in \
-            ce-ai-x86_64-apple-darwin.tar.gz \
-            ce-ai-aarch64-apple-darwin.tar.gz \
-            ce-ai-x86_64-unknown-linux-gnu.tar.gz \
-            ce-ai-aarch64-unknown-linux-gnu.tar.gz; do
+          for asset in ce-ai-x86_64-apple-darwin.tar.gz ce-ai-aarch64-apple-darwin.tar.gz; do
             curl -fsSL -o "$asset" "$BASE/$asset" || { echo "::error::Missing release asset $asset for $TAG"; exit 1; }
           done
+
+          # Linux: try -musl first, fallback to -gnu for older releases
+          for arch in x86_64 aarch64; do
+            musl_asset="ce-ai-${arch}-unknown-linux-musl.tar.gz"
+            gnu_asset="ce-ai-${arch}-unknown-linux-gnu.tar.gz"
+            if curl -fsSL -o "$musl_asset" "$BASE/$musl_asset"; then
+              echo "Downloaded $musl_asset"
+            elif curl -fsSL -o "$gnu_asset" "$BASE/$gnu_asset"; then
+              echo "Downloaded $gnu_asset (legacy fallback)"
+            else
+              echo "::error::Missing Linux release asset for $arch in $TAG"
+              exit 1
+            fi
+          done
+
           sha256sum *.tar.gz > checksums.txt
           cat checksums.txt
 
@@ -65,8 +76,15 @@ jobs:
           cd dist
           read -r MAC_X86 _ < <(sha256sum ce-ai-x86_64-apple-darwin.tar.gz)
           read -r MAC_ARM _ < <(sha256sum ce-ai-aarch64-apple-darwin.tar.gz)
-          read -r LINUX_X86 _ < <(sha256sum ce-ai-x86_64-unknown-linux-gnu.tar.gz)
-          read -r LINUX_ARM _ < <(sha256sum ce-ai-aarch64-unknown-linux-gnu.tar.gz)
+
+          LINUX_X86_ASSET="ce-ai-x86_64-unknown-linux-musl.tar.gz"
+          [ -f "$LINUX_X86_ASSET" ] || LINUX_X86_ASSET="ce-ai-x86_64-unknown-linux-gnu.tar.gz"
+          read -r LINUX_X86 _ < <(sha256sum "$LINUX_X86_ASSET")
+
+          LINUX_ARM_ASSET="ce-ai-aarch64-unknown-linux-musl.tar.gz"
+          [ -f "$LINUX_ARM_ASSET" ] || LINUX_ARM_ASSET="ce-ai-aarch64-unknown-linux-gnu.tar.gz"
+          read -r LINUX_ARM _ < <(sha256sum "$LINUX_ARM_ASSET")
+
           cat > ../Formula/ce-ai.rb <<EOF
           class CeAi < Formula
             desc "CLI for managing the compound-engineering plugin across AI harnesses"
@@ -81,10 +99,10 @@ jobs:
               url "https://github.com/mastepanoski/ce-ai/releases/download/v$VERSION/ce-ai-aarch64-apple-darwin.tar.gz"
               sha256 "$MAC_ARM"
             elsif OS.linux? && Hardware::CPU.intel?
-              url "https://github.com/mastepanoski/ce-ai/releases/download/v$VERSION/ce-ai-x86_64-unknown-linux-gnu.tar.gz"
+              url "https://github.com/mastepanoski/ce-ai/releases/download/v$VERSION/$LINUX_X86_ASSET"
               sha256 "$LINUX_X86"
             elsif OS.linux? && Hardware::CPU.arm?
-              url "https://github.com/mastepanoski/ce-ai/releases/download/v$VERSION/ce-ai-aarch64-unknown-linux-gnu.tar.gz"
+              url "https://github.com/mastepanoski/ce-ai/releases/download/v$VERSION/$LINUX_ARM_ASSET"
               sha256 "$LINUX_ARM"
             end
 
@@ -100,6 +118,6 @@ jobs:
           cd ..
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/ce-ai.rb
-          git commit -m "ce-ai $VERSION"
+          git add Formula/ce-ai.rb .github/workflows/self-update.yml
+          git commit -m "ce-ai $VERSION (support musl Linux assets)"
           git push origin main
