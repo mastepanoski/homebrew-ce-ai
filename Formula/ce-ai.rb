@@ -1,21 +1,21 @@
 class CeAi < Formula
   desc "CLI for managing the compound-engineering plugin across AI harnesses"
   homepage "https://github.com/mastepanoski/ce-ai"
-  version "3.9.0"
+  version "3.10.0"
   license "MIT"
 
   if OS.mac? && Hardware::CPU.intel?
-    url "https://github.com/mastepanoski/ce-ai/releases/download/v3.9.0/ce-ai-x86_64-apple-darwin.tar.gz"
-    sha256 "eae0791a290122ab2bd3d529844adb3732ad408f8cc3a9b1234d8c8d73301080"
+    url "https://github.com/mastepanoski/ce-ai/releases/download/v3.10.0/ce-ai-x86_64-apple-darwin.tar.gz"
+    sha256 "4334314c8ff24b03408024664004fe9aceadb644bca7069c9ce24e50ed71fa8b"
   elsif OS.mac? && Hardware::CPU.arm?
-    url "https://github.com/mastepanoski/ce-ai/releases/download/v3.9.0/ce-ai-aarch64-apple-darwin.tar.gz"
-    sha256 "00dc2e8a10a99d15820ebedc6a7f6e1d2d4c8de6694642182476fd6a3f43ea52"
+    url "https://github.com/mastepanoski/ce-ai/releases/download/v3.10.0/ce-ai-aarch64-apple-darwin.tar.gz"
+    sha256 "b5f2a4b8a1579e4097ffac006dbc02133db8e132fc966b6e6db008d691b8729e"
   elsif OS.linux? && Hardware::CPU.intel?
-    url "https://github.com/mastepanoski/ce-ai/releases/download/v3.9.0/ce-ai-x86_64-unknown-linux-musl.tar.gz"
-    sha256 "4626781c6f36332516914c5947b8395ed5387cb1b613cc2426be5128fc1acd54"
+    url "https://github.com/mastepanoski/ce-ai/releases/download/v3.10.0/ce-ai-x86_64-unknown-linux-musl.tar.gz"
+    sha256 "34a8bfd516935f1730296d964cef711492231a7b7f2d6d9b3629f993cb7a34f9"
   elsif OS.linux? && Hardware::CPU.arm?
-    url "https://github.com/mastepanoski/ce-ai/releases/download/v3.9.0/ce-ai-aarch64-unknown-linux-musl.tar.gz"
-    sha256 "fbbd3229f7b8dbbc3d0b8df3c605ed72fd71f06f152db06bd7e5f43f6566858d"
+    url "https://github.com/mastepanoski/ce-ai/releases/download/v3.10.0/ce-ai-aarch64-unknown-linux-musl.tar.gz"
+    sha256 "bafdea9b1b15d18ca0fe5aa06308e0c01710bdbf55d77e2c156dfc1a30db9435"
   end
 
   def install
